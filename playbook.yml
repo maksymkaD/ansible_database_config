@@ -1,0 +1,5 @@
+- name: Setup PostgreSQL primary and replica
+  hosts: all
+  become: yes
+  roles:
+    - postgres

@@ -1,0 +1,58 @@
+- name: Install PostgreSQL
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - postgresql
+    - postgresql-contrib
+
+- name: Ensure PostgreSQL is running
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Configure primary database
+  block:
+    - name: Configure postgresql.conf
+      lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regexp: "^#?listen_addresses", line: "listen_addresses = '*'" }
+        - { regexp: "^#?wal_level", line: "wal_level = replica" }
+        - { regexp: "^#?max_wal_senders", line: "max_wal_senders = 3" }
+
+    - name: Configure pg_hba.conf
+      lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        line: "host replication all {{ hostvars['replica']['ansible_host'] }}/32 md5"
+
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+  when: "'primary' in inventory_hostname"
+
+- name: Configure replica database
+  block:
+    - name: Stop PostgreSQL service
+      service:
+        name: postgresql
+        state: stopped
+
+    - name: Clear old data
+      file:
+        path: /var/lib/postgresql/16/main
+        state: absent
+
+    - name: Run pg_basebackup
+      command: >
+        pg_basebackup -h {{ hostvars['primary']['ansible_host'] }} -D /var/lib/postgresql/16/main -U postgres -P -R
+
+    - name: Start PostgreSQL service
+      service:
+        name: postgresql
+        state: started
+  when: "'replica' in group_names"  # Use group_names for the condition
