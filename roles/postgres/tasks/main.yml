@@ -55,4 +55,4 @@
       service:
         name: postgresql
         state: started
-  when: "'replica' in group_names"  # Use group_names for the condition
+  when: "'replica' in group_names" 
